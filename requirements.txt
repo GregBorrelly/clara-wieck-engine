@@ -1,0 +1,5 @@
+homr[cpu]==0.7.1
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+pypdfium2>=4
