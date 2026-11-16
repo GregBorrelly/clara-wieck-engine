@@ -1,4 +1,4 @@
-"""Clara Wieck engine (PlayMySheet reader service): sheet music images and PDFs in, MusicXML out.
+"""Clara Wieck reader: a sheet-music reading service built on homr. Images and PDFs in, MusicXML out.
 
 POST /read   multipart field "file" (image or PDF), optional "engine"
              or JSON {"data": "<base64 or data URL>", "engine": "homr"}
@@ -25,7 +25,7 @@ DEFAULT = os.environ.get("READER_ENGINE", "homr")
 MAX_BYTES = int(os.environ.get("READER_MAX_BYTES", 40 * 1024 * 1024))
 TOKEN = os.environ.get("READER_TOKEN")  # optional shared secret with the app
 
-app = FastAPI(title="Clara Wieck engine")
+app = FastAPI(title="Clara Wieck reader")
 _lock = threading.Lock()
 
 
@@ -36,7 +36,7 @@ def _check_token(request: Request) -> None:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "Clara Wieck engine", "engines": list(ENGINES), "default": DEFAULT if DEFAULT in ENGINES else None, "busy": _lock.locked()}
+    return {"ok": True, "name": "Clara Wieck reader", "engines": list(ENGINES), "default": DEFAULT if DEFAULT in ENGINES else None, "busy": _lock.locked()}
 
 
 @app.post("/read")

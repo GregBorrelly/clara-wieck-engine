@@ -1,11 +1,12 @@
 <div align="center">
 
-# 🎼 Clara Wieck engine
+# 🎼 Clara Wieck reader
 
 **Sheet music in. MusicXML out.**
 
-A small, self-hostable web service that reads photos, scans and PDFs of sheet music
-and returns MusicXML, bar by bar, with where each line of music sits on the page.
+A small, self-hostable reading service built on the [homr](https://github.com/liebharc/homr)
+recognition engine. Send it photos, scans or PDFs of sheet music and it returns MusicXML,
+bar by bar, with where each line of music sits on the page.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB.svg?logo=python&logoColor=white)](Dockerfile)
@@ -61,11 +62,15 @@ flowchart LR
     D --> E["🎼 MusicXML<br/>+ system positions"]
 ```
 
-The reading itself is done by [**homr**](https://github.com/liebharc/homr), an open-source
+**The recognition engine is [homr](https://github.com/liebharc/homr)**, an open-source
 optical music recognition project. It finds the staves on a page, straightens them, and reads
-each one with a trained transformer. Clara Wieck wraps it in a clean HTTP API. It also turns
-PDFs and phone photos into pages homr reads well, reports where each system is, and keeps one
-bad page from spoiling the rest.
+each one with a trained transformer. Every note, rhythm and signature in the output is homr's.
+
+Clara Wieck is the service around it. It gives homr a clean HTTP API with an optional token,
+turns PDFs and phone photos into pages homr reads well, reports where each system sits on the
+page, keeps one bad page from spoiling the rest, and ships everything as one CPU-only
+container with the models built in. It also includes a benchmark that measures how well
+pages are read, bar by bar.
 
 ## 🚀 Quick start
 
@@ -148,7 +153,7 @@ If the server has `READER_TOKEN` set, add `Authorization: Bearer <READER_TOKEN>`
 ### `GET /health`
 
 ```json
-{"ok": true, "name": "Clara Wieck engine", "engines": ["homr"], "default": "homr", "busy": false}
+{"ok": true, "name": "Clara Wieck reader", "engines": ["homr"], "default": "homr", "busy": false}
 ```
 
 `busy` is `true` while a page is being read. Pages are read **one at a time**: reading is
