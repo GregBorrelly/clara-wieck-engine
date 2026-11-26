@@ -20,10 +20,12 @@ from .engines.base import Engine
 from .engines.homr_engine import HomrEngine
 from .pages import BadUpload, is_pdf, save_pages
 from .prepare import Prepared, prepare
+from .words import find as find_words
 
 ENGINES: dict[str, Engine] = {e.name: e for e in (HomrEngine(),) if e.available()}
 DEFAULT = os.environ.get("READER_ENGINE", "homr")
 MAX_BYTES = int(os.environ.get("READER_MAX_BYTES", 40 * 1024 * 1024))
+WORDS = os.environ.get("READER_WORDS", "1") != "0"      # read the words on the page (title, tempo, "Fine"); "0" switches it off
 PREPARE = os.environ.get("READER_PREPARE", "1") != "0"  # straighten and crop photographs before reading; "0" switches it off
 TOKEN = os.environ.get("READER_TOKEN")  # optional shared secret with the app
 
@@ -81,9 +83,14 @@ async def read(request: Request):
                 try:
                     # A photograph is straightened and cut down to its page first; a PDF's pages are already flat.
                     ready = Prepared() if from_pdf or not PREPARE else prepare(path)
+                    text = find_words(path) if WORDS else []   # before the engine runs: it may tidy the picture away
                     r = engine.read_page(path)
                     out.append({"page": i + 1, "musicxml": r.musicxml, "systems": [ready.back(b) for b in r.systems],
-                                "seconds": round(r.seconds, 2), "notes": ready.notes + r.notes, "prepared": ready.changed})
+                                "seconds": round(r.seconds, 2), "notes": ready.notes + r.notes, "prepared": ready.changed,
+                                # Each line of text: where it is on the photo as sent, and (x, y) on the page as read,
+                                # which is what "seen" gives the lines of music in, so the two can be set side by side.
+                                "words": [{**w, **ready.back(w), "x": round((w["left"] + w["right"]) / 2, 4), "y": round((w["top"] + w["bottom"]) / 2, 4)} for w in text],
+                                "seen": r.systems})
                 except Exception as e:  # one bad page shouldn't lose the others
                     out.append({"page": i + 1, "error": f"{type(e).__name__}: {e}"[:300]})
     return {"engine": engine.name, "pages": out}
