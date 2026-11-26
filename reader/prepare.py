@@ -174,7 +174,9 @@ def page_box(g) -> tuple[int, int, int, int]:
     weight = np.array([lines[c:c + 4].sum() for c in cols])
     if not weight.any():
         return x0, y0, x1, y1
-    empty = weight <= 0.02 * max(1.0, float(np.percentile(weight, 90)))
+    # A stave puts five long lines over every column it crosses. A band with under a twelfth of that is not a
+    # stave: at most the straight edge left where the picture was unbent, or the rim of the paper.
+    empty = weight <= 0.08 * max(1.0, float(np.percentile(weight, 90)))
     left, right, k = x0, x1, 0
     while k < len(cols):
         if not empty[k]:
