@@ -18,11 +18,13 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile
 
 from .engines.base import Engine
 from .engines.homr_engine import HomrEngine
-from .pages import BadUpload, save_pages
+from .pages import BadUpload, is_pdf, save_pages
+from .prepare import Prepared, prepare
 
 ENGINES: dict[str, Engine] = {e.name: e for e in (HomrEngine(),) if e.available()}
 DEFAULT = os.environ.get("READER_ENGINE", "homr")
 MAX_BYTES = int(os.environ.get("READER_MAX_BYTES", 40 * 1024 * 1024))
+PREPARE = os.environ.get("READER_PREPARE", "1") != "0"  # straighten and crop photographs before reading; "0" switches it off
 TOKEN = os.environ.get("READER_TOKEN")  # optional shared secret with the app
 
 app = FastAPI(title="Clara Wieck reader")
@@ -68,6 +70,7 @@ async def read(request: Request):
         raise HTTPException(400, f"unknown engine '{engine_name}'; available: {', '.join(ENGINES) or 'none'}")
 
     with tempfile.TemporaryDirectory() as work:
+        from_pdf = is_pdf(data)
         try:
             pages = save_pages(data, work)
         except BadUpload as e:
@@ -76,8 +79,11 @@ async def read(request: Request):
         with _lock:
             for i, path in enumerate(pages):
                 try:
+                    # A photograph is straightened and cut down to its page first; a PDF's pages are already flat.
+                    ready = Prepared() if from_pdf or not PREPARE else prepare(path)
                     r = engine.read_page(path)
-                    out.append({"page": i + 1, "musicxml": r.musicxml, "systems": r.systems, "seconds": round(r.seconds, 2), "notes": r.notes})
+                    out.append({"page": i + 1, "musicxml": r.musicxml, "systems": [ready.back(b) for b in r.systems],
+                                "seconds": round(r.seconds, 2), "notes": ready.notes + r.notes, "prepared": ready.changed})
                 except Exception as e:  # one bad page shouldn't lose the others
                     out.append({"page": i + 1, "error": f"{type(e).__name__}: {e}"[:300]})
     return {"engine": engine.name, "pages": out}
