@@ -21,7 +21,7 @@ from .engines.homr_engine import HomrEngine
 from .pages import BadUpload, is_pdf, save_pages
 from .prepare import Prepared, prepare
 from .chords import find as find_chords, staff_count
-from .words import find as find_words
+from .words import find as find_words, heading
 
 ENGINES: dict[str, Engine] = {e.name: e for e in (HomrEngine(),) if e.available()}
 DEFAULT = os.environ.get("READER_ENGINE", "homr")
@@ -89,9 +89,14 @@ async def read(request: Request):
                     ready = Prepared() if from_pdf or not PREPARE else prepare(path)
                     text = find_words(path) if WORDS else []   # before the engine runs: it may tidy the picture away
                     try:
-                        staves = staff_count(path)                 # five-line staves on the page: a melody has one per line
+                        staves, music_top = staff_count(path, with_top=True)   # a melody has one staff per line
                     except Exception:
-                        staves = None
+                        staves, music_top = None, None
+                    if WORDS and music_top:
+                        # The heading read again on its own: it replaces what the page-wide reading made of that strip.
+                        head = heading(path, music_top)
+                        if head:
+                            text = [w for w in text if w["bottom"] > music_top] + head
                     kept = os.path.join(work, f"page-{i}-as-read.png")
                     if CHORDS and want_chords:
                         import shutil

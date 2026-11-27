@@ -79,20 +79,28 @@ def _staves(g):
     return bins, step, tops, sp
 
 
-def staff_count(path: str) -> int | None:
-    """How many five-line staves the page holds: one per line of music for a melody, two for a piano."""
+def staff_count(path: str, with_top: bool = False):
+    """How many five-line staves the page holds: one per line of music for a melody, two for a piano.
+
+    With `with_top`, also where the first staff's top line is, as a fraction of the page (less a line spacing):
+    everything above it is the heading."""
     try:
         import cv2
         import numpy as np
     except ImportError:
-        return None
+        return (None, None) if with_top else None
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        return None
+        return (None, None) if with_top else None
     bins, step, tops, sp = _staves(img)
     # Across the middle half of the page, where every staff runs: the usual number found in one column strip.
     mid = [len(t) for i, t in enumerate(tops) if len(bins) // 4 <= i < 3 * len(bins) // 4]
-    return int(np.median(mid)) if mid else None
+    count = int(np.median(mid)) if mid else None
+    if not with_top:
+        return count
+    firsts = [t.min() for i, t in enumerate(tops) if len(t) and len(bins) // 4 <= i < 3 * len(bins) // 4]
+    top = (float(np.median(firsts)) - sp) / img.shape[0] if firsts else None
+    return count, top
 
 
 def _trace(box, H, W, bins, step, tops, sp):
