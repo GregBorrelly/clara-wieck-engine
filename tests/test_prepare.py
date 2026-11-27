@@ -89,4 +89,16 @@ check(not ready.changed and same, "a picture too small to judge is left alone")
 blank = np.full((1200, 900), 250, np.uint8)
 ready, out, same = run(blank)
 check(not ready.changed and same, "a page with no staves is left alone")
+# The top of a photographed page in shadow (a book's curve) is still paper: the title printed there is kept.
+shaded = page()
+shaded[:200] = (shaded[:200].astype(np.float32) * 0.65).astype(np.uint8)   # paper at about two thirds of its brightness
+cv2.putText(shaded, "TITLE", (500, 120), cv2.FONT_HERSHEY_SIMPLEX, 3, 20, 8)
+g = P._grey(shaded)
+left, top, right, bottom = P.page_box(g)
+check(top == 0, f"a page whose top is in shadow keeps its top, title and all (cut at {top})")
+desk = page()
+desk[:150] = 30                                                              # a dark table above the paper
+left, top, right, bottom = P.page_box(P._grey(desk))
+check(top >= 100, f"a dark table above the paper is still cut away (cut at {top})")
+
 print("all preparation tests passed")

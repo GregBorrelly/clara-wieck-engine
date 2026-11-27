@@ -24,6 +24,7 @@ from typing import Callable
 LEVEL = 0.004       # mean slope (rise over run) below which staff lines count as straight: about a quarter of a degree
 NEEDS = 0.012       # a page is only straightened if its lines lean more than this (about 0.7 degrees): a scan is left alone
 PASSES = 5
+DARK = 0.55         # a band above or below the paper is cut away only if it is darker than this share of the paper
 TERMS = [(i, j) for i in range(5) for j in range(4)]  # slope may bend along the page and differ from top to bottom
 
 
@@ -156,7 +157,7 @@ def page_box(g) -> tuple[int, int, int, int]:
     """The part of the picture that is this page: (left, top, right, bottom) in pixels.
 
     The paper's own extent, less the edge of a facing page. Nothing is cut from the top or bottom of the
-    paper, and a cut between pages is made only in the middle of a band that no staff line crosses, so no
+    paper (a band there goes only if it is clearly darker than paper), and a cut between pages is made only in the middle of a band that no staff line crosses, so no
     line of this page's music can be lost.
     """
     import numpy as np
@@ -166,6 +167,13 @@ def page_box(g) -> tuple[int, int, int, int]:
     if not len(xs):
         return 0, 0, W, H
     x0, x1, y0, y1 = int(xs.min()), int(xs.max()) + 1, int(ys.min()), int(ys.max()) + 1
+    # Above and below, only what is clearly not paper is cut: a dark table or a shadow. Paper in the shade of the
+    # page's curve is still paper, and holds the title and the composer at the top and the small print at the foot.
+    paper_level = float(np.median(g[sheet]))
+    if y0 > 0 and float(np.median(g[:y0])) > DARK * paper_level:
+        y0 = 0
+    if y1 < H and float(np.median(g[y1:])) > DARK * paper_level:
+        y1 = H
     import cv2
     # Staff lines well inside the paper: the paper's own top and bottom edges also run sideways, and are not music.
     inside = cv2.erode(sheet.astype(np.uint8), np.ones((max(15, H // 60), max(15, W // 60)), np.uint8)) > 0

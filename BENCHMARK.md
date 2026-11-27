@@ -38,3 +38,19 @@ copyright reasons): all staves and systems found on the three music pages, key a
 signatures right including a change of key, 40 bars read. After the app's checks, 5 of
 the 40 bars were flagged as not adding up; each was a genuine misread or a free-time
 cadenza.
+
+## Chord symbols (27 November 2026)
+
+`reader/chords.py` reads the chord symbols over each line of music. Measured against hand-written answers:
+
+| Page | Chords | Read right | Invented |
+|---|---|---|---|
+| Photographed lead sheet, full size (3272 px wide) | 52 | 52 | 0 |
+| The same photo at 3000 px (as the app sends it) | 52 | 47 to 50 | 0 to 1 |
+| Engraved piano page, Auld Lang Syne | 16 | 14 | 0 |
+| Engraved piano page, The Stranger | 15 | 13 | 0 |
+
+The ten readings in `READINGS` were chosen greedily from 18 (three band heights over the chord row, page segmentation
+modes 6, 11 and 4, at one or two times the size). Resizing a band before reading cost chords (even 4%), so bands are read
+at the page's own size unless it is very small or very large. It adds about 16 s to a photographed page on a 10-core
+machine (4 to 6 s on an engraved page), and is skipped for the second, smaller reading the app asks for.

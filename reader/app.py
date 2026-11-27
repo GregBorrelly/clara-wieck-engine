@@ -20,6 +20,7 @@ from .engines.base import Engine
 from .engines.homr_engine import HomrEngine
 from .pages import BadUpload, is_pdf, save_pages
 from .prepare import Prepared, prepare
+from .chords import find as find_chords, staff_count
 from .words import find as find_words
 
 ENGINES: dict[str, Engine] = {e.name: e for e in (HomrEngine(),) if e.available()}
@@ -27,6 +28,7 @@ DEFAULT = os.environ.get("READER_ENGINE", "homr")
 MAX_BYTES = int(os.environ.get("READER_MAX_BYTES", 40 * 1024 * 1024))
 WORDS = os.environ.get("READER_WORDS", "1") != "0"      # read the words on the page (title, tempo, "Fine"); "0" switches it off
 PREPARE = os.environ.get("READER_PREPARE", "1") != "0"  # straighten and crop photographs before reading; "0" switches it off
+CHORDS = os.environ.get("READER_CHORDS", "1") != "0"    # read chord symbols over the music ("Am7", "G/B"); "0" switches it off
 TOKEN = os.environ.get("READER_TOKEN")  # optional shared secret with the app
 
 app = FastAPI(title="Clara Wieck reader")
@@ -47,6 +49,7 @@ def health():
 async def read(request: Request):
     _check_token(request)
     engine_name = DEFAULT
+    want_chords = True
     ctype = request.headers.get("content-type", "")
     if ctype.startswith("multipart/"):
         form = await request.form()
@@ -63,6 +66,7 @@ async def read(request: Request):
         except ValueError:
             raise HTTPException(400, "data must be base64") from None
         engine_name = str(body.get("engine") or engine_name)
+        want_chords = body.get("chords", True) is not False   # a second reading of the same page can do without
     if not data:
         raise HTTPException(400, "the file is empty")
     if len(data) > MAX_BYTES:
@@ -84,13 +88,29 @@ async def read(request: Request):
                     # A photograph is straightened and cut down to its page first; a PDF's pages are already flat.
                     ready = Prepared() if from_pdf or not PREPARE else prepare(path)
                     text = find_words(path) if WORDS else []   # before the engine runs: it may tidy the picture away
+                    try:
+                        staves = staff_count(path)                 # five-line staves on the page: a melody has one per line
+                    except Exception:
+                        staves = None
+                    kept = os.path.join(work, f"page-{i}-as-read.png")
+                    if CHORDS and want_chords:
+                        import shutil
+                        shutil.copyfile(path, kept)
                     r = engine.read_page(path)
+                    # Chord symbols are found over each line of music, so after the engine has said where the lines are.
+                    # Their "px" is across the page as read, in pixels, as the engine gives each note's position.
+                    chords, layout = [], {}
+                    if CHORDS and want_chords and os.path.exists(kept):
+                        import cv2
+                        w = cv2.imread(kept, cv2.IMREAD_GRAYSCALE).shape[1]
+                        chords = [{**c, **ready.back(c), "x": c["x"], "y": c["y"], "px": round(c["left"] * w), "px_right": round(c["right"] * w)}
+                                  for c in find_chords(kept, r.systems, layout=layout)]
                     out.append({"page": i + 1, "musicxml": r.musicxml, "systems": [ready.back(b) for b in r.systems],
                                 "seconds": round(r.seconds, 2), "notes": ready.notes + r.notes, "prepared": ready.changed,
                                 # Each line of text: where it is on the photo as sent, and (x, y) on the page as read,
                                 # which is what "seen" gives the lines of music in, so the two can be set side by side.
                                 "words": [{**w, **ready.back(w), "x": round((w["left"] + w["right"]) / 2, 4), "y": round((w["top"] + w["bottom"]) / 2, 4)} for w in text],
-                                "seen": r.systems})
+                                "seen": r.systems, "chords": chords, "staves": staves, "barlines": layout.get("barlines") or []})
                 except Exception as e:  # one bad page shouldn't lose the others
                     out.append({"page": i + 1, "error": f"{type(e).__name__}: {e}"[:300]})
     return {"engine": engine.name, "pages": out}
